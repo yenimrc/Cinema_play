@@ -7,7 +7,7 @@ def main(page: ft.Page):
 
     #para poner una imagen
     img = ft.Image(
-        src="interfaz/.venv/disenio/img/imagen.jpg",
+        src="img/imagen.jpg",
         width=500,
         height=400,
         fit=ft.ImageFit.CONTAIN, 
@@ -35,3 +35,4 @@ def main(page: ft.Page):
 ft.app(target=main)
 
 #archivo de diseño de interfaz
+#falta agregar imagenes que representen a las peliculas 
