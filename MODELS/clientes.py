@@ -5,4 +5,3 @@ class Cliente(DatosIdentificacion):
         self.id_cliente=id_cliente
         self.historial_renta=[]
         
-   
