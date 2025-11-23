@@ -5,51 +5,132 @@ class PeliculaView(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("🎬 Gestión de Películas")
-        self.geometry("800x500")
+        self.geometry("900x540")
+        self.configure(bg="#F2F6FF")
 
-        # --- Campos de entrada ---
-        frame_form = tk.Frame(self)
-        frame_form.pack(pady=10)
+        # ========== HEADER ==========
+        header = tk.Frame(self, bg="#1F6FEB", height=60)
+        header.pack(fill="x")
 
-        tk.Label(frame_form, text="ID:").grid(row=0, column=0)
-        self.id_entry = tk.Entry(frame_form, width=10)
-        self.id_entry.grid(row=0, column=1)
+        tk.Label(
+            header,
+            text="Gestión de Películas",
+            bg="#1F6FEB",
+            fg="white",
+            font=("Segoe UI", 18, "bold")
+        ).pack(pady=10)
 
-        tk.Label(frame_form, text="Título:").grid(row=0, column=2)
-        self.titulo_entry = tk.Entry(frame_form, width=25)
-        self.titulo_entry.grid(row=0, column=3)
+        # ========== CARD FORMULARIO ==========
+        card = tk.Frame(self, bg="white", bd=0, padx=10, pady=10)
+        card.pack(pady=15, padx=25, fill="x")
 
-        tk.Label(frame_form, text="Género:").grid(row=1, column=0)
-        self.genero_entry = tk.Entry(frame_form, width=15)
-        self.genero_entry.grid(row=1, column=1)
+        tk.Label(
+            card,
+            text="Registrar / Editar Película",
+            bg="white",
+            fg="#0D2B60",
+            font=("Segoe UI", 15, "bold")
+        ).grid(row=0, column=0, columnspan=4, pady=(5, 20))
 
-        tk.Label(frame_form, text="Año:").grid(row=1, column=2)
-        self.anio_entry = tk.Entry(frame_form, width=10)
-        self.anio_entry.grid(row=1, column=3)
+        # ---------- TÍTULO ----------
+        tk.Label(
+            card, text="Título:", bg="white", fg="#0D2B60",
+            font=("Segoe UI", 11, "bold")
+        ).grid(row=1, column=0, sticky="e", padx=5)
 
-        tk.Label(frame_form, text="Estado:").grid(row=2, column=0)
-        self.estado_combo = ttk.Combobox(frame_form, values=["Disponible", "Rentada"])
-        self.estado_combo.grid(row=2, column=1)
+        self.titulo_entry = tk.Entry(
+            card, width=35, relief="flat",
+            highlightthickness=2, highlightbackground="#1F6FEB"
+        )
+        self.titulo_entry.grid(row=1, column=1, padx=5, pady=5)
 
-        # --- Botones ---
-        frame_btn = tk.Frame(self)
+        # ---------- GÉNERO ----------
+        tk.Label(
+            card, text="Género:", bg="white", fg="#0D2B60",
+            font=("Segoe UI", 11, "bold")
+        ).grid(row=1, column=2, sticky="e", padx=5)
+
+        self.genero_combo = ttk.Combobox(
+            card,
+            values=[
+                "Acción", "Aventura", "Comedia", "Drama", "Romance",
+                "Terror", "Ciencia Ficción", "Suspenso", "Animación",
+                "Documental"
+            ],
+            width=20
+        )
+        self.genero_combo.grid(row=1, column=3, padx=5, pady=5)
+
+        # ---------- ESTADO ----------
+        tk.Label(
+            card, text="Estado:", bg="white", fg="#0D2B60",
+            font=("Segoe UI", 11, "bold")
+        ).grid(row=2, column=0, sticky="e", padx=5)
+
+        self.estado_combo = ttk.Combobox(
+            card,
+            values=["Disponible", "Rentada"],
+            width=20
+        )
+        self.estado_combo.grid(row=2, column=1, padx=5, pady=5)
+
+        # ========== BOTONES ==========
+        frame_btn = tk.Frame(self, bg="#F2F6FF")
         frame_btn.pack(pady=10)
-        tk.Button(frame_btn, text="➕ Agregar", command=self.agregar).grid(row=0, column=0, padx=5)
-        tk.Button(frame_btn, text="✏️ Editar", command=self.editar).grid(row=0, column=1, padx=5)
-        tk.Button(frame_btn, text="🗑️ Eliminar", command=self.eliminar).grid(row=0, column=2, padx=5)
-        tk.Button(frame_btn, text="🔍 Buscar", command=self.buscar).grid(row=0, column=3, padx=5)
 
-        # --- Tabla ---
-        columnas = ("ID", "Título", "Género", "Año", "Estado")
-        self.tabla = ttk.Treeview(self, columns=columnas, show="headings", height=15)
+        botones = [
+            ("➕ Agregar", "#FF6200", "#FF6600", self.agregar),
+            ("✏️ Editar", "#0066FF", "#0059FF", self.editar),
+            ("🗑️ Eliminar", "#FF0000", "#FF0000", self.eliminar),
+            ("🔍 Buscar", "#FFBF00", "#FFC002", self.buscar)
+        ]
+
+        for i, (txt, bg, hover, cmd) in enumerate(botones):
+            btn = tk.Button(
+                frame_btn, text=txt, bg=bg, fg="white",
+                font=("Segoe UI", 11, "bold"),
+                relief="flat", padx=20, pady=7,
+                activebackground=hover,
+                cursor="hand2",
+                command=cmd
+            )
+            btn.grid(row=0, column=i, padx=12)
+
+        # ========== TABLA ==========
+        columnas = ("Título", "Género", "Estado")
+
+        tabla_frame = tk.Frame(self, bg="#F2F6FF")
+        tabla_frame.pack(pady=10, fill="both", expand=True)
+
+        self.tabla = ttk.Treeview(
+            tabla_frame, columns=columnas,
+            show="headings", height=10
+        )
+
+        style = ttk.Style()
+        style.theme_use("default")
+        style.configure("Treeview.Heading",
+                        background="#004AB9",
+                        foreground="white",
+                        font=("Segoe UI", 11, "bold"))
+        style.configure("Treeview",
+                        font=("Segoe UI", 10),
+                        rowheight=27,
+                        background="white",
+                        fieldbackground="white")
+
         for col in columnas:
             self.tabla.heading(col, text=col)
-        self.tabla.pack(pady=10)
+            self.tabla.column(col, width=200, anchor="center")
 
+        self.tabla.pack(fill="both", expand=True)
+
+    # ========== FUNCIONES ==========
     def agregar(self): pass
     def editar(self): pass
     def eliminar(self): pass
     def buscar(self): pass
+
 
 if __name__ == "__main__":
     PeliculaView().mainloop()

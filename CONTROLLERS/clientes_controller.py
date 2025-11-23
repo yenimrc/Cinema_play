@@ -11,7 +11,7 @@ class ClienteView:
         
         # Controles principales
         self.titulo = ft.Text(
-            "Gestión de Clientes - CHENA_PLAY",
+            "Gestión de Clientes - CiNENA_PLAY",
             size=24,
             weight=ft.FontWeight.BOLD,
             color=ft.colors.BLUE_900
@@ -32,7 +32,7 @@ class ClienteView:
         # DataTable para mostrar clientes
         self.tabla_clientes = ft.DataTable(
             columns=[
-                ft.DataColumn(ft.Text("ID")),
+                #ft.DataColumn(ft.Text("ID")),
                 ft.DataColumn(ft.Text("Nombre")),
                 ft.DataColumn(ft.Text("Email")),
                 ft.DataColumn(ft.Text("Teléfono")),
@@ -50,7 +50,7 @@ class ClienteView:
                 ft.TextField(label="Nombre completo", prefix_icon=ft.icons.PERSON),
                 ft.TextField(label="Email", prefix_icon=ft.icons.EMAIL),
                 ft.TextField(label="Teléfono", prefix_icon=ft.icons.PHONE),
-                ft.TextField(label="Dirección", prefix_icon=ft.icons.HOME),
+                #ft.TextField(label="Dirección", prefix_icon=ft.icons.HOME),
             ],
             tight=True,
             height=300),
@@ -71,7 +71,7 @@ class ClienteView:
         for cliente in self.clientes:
             row = ft.DataRow(
                 cells=[
-                    ft.DataCell(ft.Text(str(cliente.id_cliente))),
+                    #ft.DataCell(ft.Text(str(cliente.id_cliente))),
                     ft.DataCell(ft.Text(cliente.nombre)),
                     ft.DataCell(ft.Text(cliente.email)),
                     ft.DataCell(ft.Text(cliente.telefono or "-")),
@@ -150,7 +150,7 @@ class ClienteView:
         contenido[0].value = cliente.nombre
         contenido[1].value = cliente.email
         contenido[2].value = cliente.telefono
-        contenido[3].value = cliente.direccion
+        #contenido[3].value = cliente.direccion
         
         self.page.dialog = self.dialogo_cliente
         self.dialogo_cliente.open = True
@@ -181,7 +181,7 @@ class ClienteView:
                     nombre=nombre,
                     email=email,
                     telefono=telefono,
-                    direccion=direccion
+                   #direccion=direccion
                 )
                 self.controller.registrar_cliente(nuevo_cliente)
             

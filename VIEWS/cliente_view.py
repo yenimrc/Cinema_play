@@ -1,5 +1,6 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
+import pyodbc
 
 class CatalogoPeliculasView(tk.Tk):
     def __init__(self):
@@ -8,12 +9,36 @@ class CatalogoPeliculasView(tk.Tk):
         self.geometry("900x600")
         self.configure(bg='#f4f4f9')  # Fondo claro
         
+        # Conexión a SQL Server
+        self.conexion = self.conectar_sql_server()
+        
         # Configurar estilo para widgets
         self.style = ttk.Style()
         self.style.theme_use('clam')
         self.configure_styles()
         
         self.crear_interfaz()
+    
+def conectar_sql_server(self):
+    """Conectar a la base de datos SQL Server usando Trusted_Connection"""
+    try:
+        conexion = (
+            "DRIVER={ODBC Driver 17 for SQL Server};"
+            "SERVER=LAPTOP-N1LR75PN;"   # Nombre de tu servidor
+            "DATABASE=Cinema;"          # Nombre de tu base de datos
+            "Trusted_Connection=yes;"   # Conexión con el usuario de Windows
+        )
+        
+        return conexion
+    except Exception as e:
+        messagebox.showerror("Error", f"No se pudo conectar a la base de datos:\n{e}")
+        return None
+    
+    except Exception as e:
+        messagebox.showerror("Error de conexión",
+                             f"No se pudo conectar a SQL Server:\n{e}")
+        self.destroy()
+
     
     def configure_styles(self):
         """Configurar estilos personalizados para los widgets"""
@@ -24,25 +49,25 @@ class CatalogoPeliculasView(tk.Tk):
         
         # Botones con colores distintos
         self.style.configure('Buscar.TButton',
-                           background="#1e5abb",  # Azul
+                           background="#1e5abb",  
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Rentar.TButton',
-                           background="#0492cf",  # Azul clario
+                           background="#0492cf",  
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Devolver.TButton',
-                           background="#1c66dc",  # azul
+                           background="#1c66dc",  
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Actualizar.TButton',
-                           background="#afafc5",  # Gris neutro
+                           background="#afafc5",  
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
@@ -55,8 +80,8 @@ class CatalogoPeliculasView(tk.Tk):
                            font=('Verdana', 10))
         
         self.style.configure('Custom.Treeview.Heading',
-                           background="#5b76a1",    #color de fondo de encabezados de tabla
-                           foreground='black',      #color de texto de encabezados de tabla
+                           background="#5b76a1",    
+                           foreground='black',      
                            font=('Verdana', 11, 'bold'))
         
         self.style.configure('Entry.TEntry',
@@ -124,7 +149,7 @@ class CatalogoPeliculasView(tk.Tk):
         self.tabla.pack(side='left', fill='both', expand=True)
         scrollbar.pack(side='right', fill='y')
         
-        self.agregar_datos_ejemplo()
+        self.cargar_peliculas()
         
         # Frame de botones de acción
         frame_botones = tk.Frame(main_frame, bg='#f4f4f9')
@@ -144,7 +169,7 @@ class CatalogoPeliculasView(tk.Tk):
         
         btn_actualizar = ttk.Button(frame_botones, 
                                   text="🔄 ACTUALIZAR CATÁLOGO", 
-                                  command=self.actualizar,
+                                  command=self.cargar_peliculas,
                                   style='Actualizar.TButton')
         btn_actualizar.grid(row=0, column=2, padx=10)
         
@@ -156,52 +181,55 @@ class CatalogoPeliculasView(tk.Tk):
                          fg="#000000")
         footer.pack(side='bottom', pady=(10, 0))
     
-    def agregar_datos_ejemplo(self):
-        self.peliculas_ejemplo = [
-            ("El Padrino", "Drama/Crimen", "🟢 Disponible"),
-            ("Pulp Fiction", "Crimen/Drama", "🟢 Disponible"),
-            ("El Señor de los Anillos", "Fantasía/Aventura", "🔴 Rentada"),
-            ("Matrix", "Ciencia Ficción", "🟢 Disponible"),
-            ("Forrest Gump", "Drama/Comedia", "🔴 Rentada"),
-            ("Interestelar", "Ciencia Ficción", "🟢 Disponible"),
-            ("El Rey León", "Animación/Musical", "🟡 Próximamente"),
-            ("Titanic", "Romance/Drama", "🟢 Disponible")
-        ]
-        
-        for pelicula in self.peliculas_ejemplo:
-            self.tabla.insert("", "end", values=pelicula)
+    def cargar_peliculas(self):
+        """Cargar películas desde SQL Server"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT titulo, genero, disponible FROM Peliculas")
+            peliculas = cursor.fetchall()
+            
+            # Limpiar tabla
+            for item in self.tabla.get_children():
+                self.tabla.delete(item)
+            
+            # Insertar datos
+            for titulo, genero, disponible in peliculas:
+                estado = "🟢 Disponible" if disponible else "🔴 Rentada"
+                self.tabla.insert("", "end", values=(titulo, genero, estado))
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudieron cargar las películas:\n{e}")
     
     def buscar_pelicula(self):
         nombre = self.entry_busqueda.get().strip().lower()
-        # Limpiar tabla
-        for item in self.tabla.get_children():
-            self.tabla.delete(item)
-        
-        # Filtrar películas
-        resultados = [p for p in self.peliculas_ejemplo if nombre in p[0].lower()]
-        
-        if resultados:
-            for pelicula in resultados:
-                self.tabla.insert("", "end", values=pelicula)
-        else:
-            messagebox.showinfo("Búsqueda", f"No se encontró la película: {nombre}")
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT titulo, genero, disponible FROM Peliculas WHERE LOWER(titulo) LIKE ?", f"%{nombre}%")
+            resultados = cursor.fetchall()
+            
+            # Limpiar tabla
+            for item in self.tabla.get_children():
+                self.tabla.delete(item)
+            
+            if resultados:
+                for titulo, genero, disponible in resultados:
+                    estado = "🟢 Disponible" if disponible else "🔴 Rentada"
+                    self.tabla.insert("", "end", values=(titulo, genero, estado))
+            else:
+                messagebox.showinfo("Búsqueda", f"No se encontró la película: {nombre}")
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo realizar la búsqueda:\n{e}")
     
     def rentar(self):
         messagebox.showinfo("Acción", "Función de rentar en construcción")
     
     def devolver(self):
         messagebox.showinfo("Acción", "Función de devolver en construcción")
-    
-    def actualizar(self):
-        # Restaurar todas las películas
-        for item in self.tabla.get_children():
-            self.tabla.delete(item)
-        for pelicula in self.peliculas_ejemplo:
-            self.tabla.insert("", "end", values=pelicula)
 
 if __name__ == "__main__":
     app = CatalogoPeliculasView()
     app.mainloop()
+
+
 
 
 

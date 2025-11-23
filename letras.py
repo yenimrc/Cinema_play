@@ -10,7 +10,7 @@ root.title("Vista Previa de Tipos de Letra (Tkinter)")
 font_families = tkFont.families()
 
 # 3. Limitar la lista a los primeros 50
-max_fonts = 400
+max_fonts = 300 #número máximo de fuentes a mostrar
 preview_fonts = font_families[:max_fonts]
 
 # 4. Crear un contenedor con barra de desplazamiento
