@@ -50,24 +50,28 @@ def conectar_sql_server(self):
         # Botones con colores distintos
         self.style.configure('Buscar.TButton',
                            background="#1e5abb",  
+                           background="#1e5abb",  # Azul
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Rentar.TButton',
                            background="#0492cf",  
+                           background="#0492cf",  # Azul clario
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Devolver.TButton',
                            background="#1c66dc",  
+                           background="#1c66dc",  # azul
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Actualizar.TButton',
                            background="#afafc5",  
+                           background="#afafc5",  # Gris neutro
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
@@ -82,6 +86,8 @@ def conectar_sql_server(self):
         self.style.configure('Custom.Treeview.Heading',
                            background="#5b76a1",    
                            foreground='black',      
+                           background="#5b76a1",    #color de fondo de encabezados de tabla
+                           foreground='black',      #color de texto de encabezados de tabla
                            font=('Verdana', 11, 'bold'))
         
         self.style.configure('Entry.TEntry',
@@ -150,6 +156,7 @@ def conectar_sql_server(self):
         scrollbar.pack(side='right', fill='y')
         
         self.cargar_peliculas()
+        self.agregar_datos_ejemplo()
         
         # Frame de botones de acción
         frame_botones = tk.Frame(main_frame, bg='#f4f4f9')
@@ -170,6 +177,7 @@ def conectar_sql_server(self):
         btn_actualizar = ttk.Button(frame_botones, 
                                   text="🔄 ACTUALIZAR CATÁLOGO", 
                                   command=self.cargar_peliculas,
+                                  command=self.actualizar,
                                   style='Actualizar.TButton')
         btn_actualizar.grid(row=0, column=2, padx=10)
         
@@ -218,6 +226,35 @@ def conectar_sql_server(self):
                 messagebox.showinfo("Búsqueda", f"No se encontró la película: {nombre}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo realizar la búsqueda:\n{e}")
+    def agregar_datos_ejemplo(self):
+        self.peliculas_ejemplo = [
+            ("El Padrino", "Drama/Crimen", "🟢 Disponible"),
+            ("Pulp Fiction", "Crimen/Drama", "🟢 Disponible"),
+            ("El Señor de los Anillos", "Fantasía/Aventura", "🔴 Rentada"),
+            ("Matrix", "Ciencia Ficción", "🟢 Disponible"),
+            ("Forrest Gump", "Drama/Comedia", "🔴 Rentada"),
+            ("Interestelar", "Ciencia Ficción", "🟢 Disponible"),
+            ("El Rey León", "Animación/Musical", "🟡 Próximamente"),
+            ("Titanic", "Romance/Drama", "🟢 Disponible")
+        ]
+        
+        for pelicula in self.peliculas_ejemplo:
+            self.tabla.insert("", "end", values=pelicula)
+    
+    def buscar_pelicula(self):
+        nombre = self.entry_busqueda.get().strip().lower()
+        # Limpiar tabla
+        for item in self.tabla.get_children():
+            self.tabla.delete(item)
+        
+        # Filtrar películas
+        resultados = [p for p in self.peliculas_ejemplo if nombre in p[0].lower()]
+        
+        if resultados:
+            for pelicula in resultados:
+                self.tabla.insert("", "end", values=pelicula)
+        else:
+            messagebox.showinfo("Búsqueda", f"No se encontró la película: {nombre}")
     
     def rentar(self):
         messagebox.showinfo("Acción", "Función de rentar en construcción")
@@ -233,3 +270,14 @@ if __name__ == "__main__":
 
 
 
+    
+    def actualizar(self):
+        # Restaurar todas las películas
+        for item in self.tabla.get_children():
+            self.tabla.delete(item)
+        for pelicula in self.peliculas_ejemplo:
+            self.tabla.insert("", "end", values=pelicula)
+
+if __name__ == "__main__":
+    app = CatalogoPeliculasView()
+    app.mainloop()
