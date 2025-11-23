@@ -185,20 +185,23 @@ class RentaView(tk.Toplevel):
                 for renta in rentas:
                     id_renta, cliente, pelicula, fecha_inicio, fecha_devolucion, dias_restantes = renta
                     
-                    # Formatear fechas
-                    fecha_inicio_str = fecha_inicio.strftime("%d/%m/%Y") if fecha_inicio else "N/A"
-                    fecha_devolucion_str = fecha_devolucion.strftime("%d/%m/%Y") if fecha_devolucion else "N/A"
+                    # ✅ CORRECCIÓN: Validar y formatear fechas de forma segura
+                    fecha_inicio_str = self.formatear_fecha(fecha_inicio)
+                    fecha_devolucion_str = self.formatear_fecha(fecha_devolucion)
                     
                     # Determinar color según días restantes
                     dias_texto = f"{dias_restantes} días"
-                    if dias_restantes < 0:
-                        dias_texto = f"⚠️ {abs(dias_restantes)} días de retraso"
-                    elif dias_restantes <= 2:
-                        dias_texto = f"🔴 {dias_restantes} días"
-                    elif dias_restantes <= 5:
-                        dias_texto = f"🟡 {dias_restantes} días"
+                    if dias_restantes is not None:
+                        if dias_restantes < 0:
+                            dias_texto = f"⚠️ {abs(dias_restantes)} días de retraso"
+                        elif dias_restantes <= 2:
+                            dias_texto = f"🔴 {dias_restantes} días"
+                        elif dias_restantes <= 5:
+                            dias_texto = f"🟡 {dias_restantes} días"
+                        else:
+                            dias_texto = f"🟢 {dias_restantes} días"
                     else:
-                        dias_texto = f"🟢 {dias_restantes} días"
+                        dias_texto = "N/A"
                     
                     self.tabla.insert("", "end", values=(
                         id_renta, cliente, pelicula, fecha_inicio_str, 
@@ -222,9 +225,9 @@ class RentaView(tk.Toplevel):
                 for dev in devoluciones:
                     id_renta, cliente, pelicula, fecha_inicio, fecha_devolucion, estado = dev
                     
-                    # Formatear fechas
-                    fecha_inicio_str = fecha_inicio.strftime("%d/%m/%Y") if fecha_inicio else "N/A"
-                    fecha_devolucion_str = fecha_devolucion.strftime("%d/%m/%Y") if fecha_devolucion else "N/A"
+                    # ✅ CORRECCIÓN: Usar función segura para formatear fechas
+                    fecha_inicio_str = self.formatear_fecha(fecha_inicio)
+                    fecha_devolucion_str = self.formatear_fecha(fecha_devolucion)
                     
                     estado_texto = "✅ Devuelto" if estado == "Devuelto" else estado
                     
@@ -236,6 +239,93 @@ class RentaView(tk.Toplevel):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudieron cargar los datos: {e}")
 
+    def formatear_fecha(self, fecha):
+        """✅ FUNCIÓN NUEVA: Formatear fecha de manera segura"""
+        try:
+            if fecha is None:
+                return "N/A"
+            
+            # Si ya es un string, devolverlo tal cual
+            if isinstance(fecha, str):
+                return fecha
+                
+            # Si es un objeto datetime, formatearlo
+            if hasattr(fecha, 'strftime'):
+                return fecha.strftime("%d/%m/%Y")
+                
+            # Para cualquier otro tipo, convertirlo a string
+            return str(fecha)
+            
+        except Exception:
+            return "Fecha inválida"
+
+    def calcular_recargo(self):
+        """Calcular recargo por retraso"""
+        seleccion = self.tabla.selection()
+        if not seleccion:
+            messagebox.showwarning("Advertencia", "Por favor seleccione una renta para calcular recargo.")
+            return
+
+        item = self.tabla.item(seleccion[0])
+        valores = item['values']
+        id_renta = valores[0]
+        cliente = valores[1]
+        pelicula = valores[2]
+
+        try:
+            cursor = self.conn.cursor()
+            
+            # Obtener información de la renta
+            cursor.execute("""
+                SELECT r.fecha_devolucion, p.costo_renta
+                FROM Renta r
+                JOIN Pelicula p ON r.id_pelicula = p.id_pelicula
+                WHERE r.id_renta = ?
+            """, id_renta)
+            
+            resultado = cursor.fetchone()
+            if resultado:
+                fecha_limite, costo_renta = resultado
+                
+                # ✅ CORRECCIÓN: Validar que fecha_limite no sea None
+                if fecha_limite is None:
+                    messagebox.showwarning("Error", "No se encontró fecha límite para esta renta.")
+                    return
+                
+                # ✅ CORRECCIÓN: Asegurarse de que ambas fechas sean objetos date
+                fecha_hoy = datetime.now().date()
+                if hasattr(fecha_limite, 'date'):
+                    fecha_limite_date = fecha_limite.date()
+                else:
+                    fecha_limite_date = fecha_limite
+                
+                dias_retraso = (fecha_hoy - fecha_limite_date).days
+                
+                if dias_retraso > 0:
+                    recargo = costo_renta * 0.1 * dias_retraso  # 10% por día de retraso
+                    total = costo_renta + recargo
+                    
+                    messagebox.showinfo(
+                        "Cálculo de Recargo",
+                        f"Cliente: {cliente}\n"
+                        f"Película: {pelicula}\n"
+                        f"Días de retraso: {dias_retraso}\n"
+                        f"Costo renta: ${costo_renta:.2f}\n"
+                        f"Recargo: ${recargo:.2f}\n"
+                        f"Total a pagar: ${total:.2f}"
+                    )
+                else:
+                    messagebox.showinfo(
+                        "Sin Recargo",
+                        f"Cliente: {cliente}\n"
+                        f"Película: {pelicula}\n"
+                        f"No hay recargo. La renta está al día."
+                    )
+
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo calcular el recargo: {e}")
+
+    # ... (el resto de los métodos permanecen igual)
     def registrar_devolucion(self):
         """Registrar devolución de una renta seleccionada"""
         seleccion = self.tabla.selection()
@@ -276,60 +366,6 @@ class RentaView(tk.Toplevel):
             except Exception as e:
                 messagebox.showerror("Error", f"No se pudo registrar la devolución: {e}")
 
-    def calcular_recargo(self):
-        """Calcular recargo por retraso"""
-        seleccion = self.tabla.selection()
-        if not seleccion:
-            messagebox.showwarning("Advertencia", "Por favor seleccione una renta para calcular recargo.")
-            return
-
-        item = self.tabla.item(seleccion[0])
-        valores = item['values']
-        id_renta = valores[0]
-        cliente = valores[1]
-        pelicula = valores[2]
-        dias_texto = valores[5]
-
-        try:
-            cursor = self.conn.cursor()
-            
-            # Obtener información de la renta
-            cursor.execute("""
-                SELECT r.fecha_devolucion, p.costo_renta
-                FROM Renta r
-                JOIN Pelicula p ON r.id_pelicula = p.id_pelicula
-                WHERE r.id_renta = ?
-            """, id_renta)
-            
-            resultado = cursor.fetchone()
-            if resultado:
-                fecha_limite, costo_renta = resultado
-                dias_retraso = (datetime.now().date() - fecha_limite).days
-                
-                if dias_retraso > 0:
-                    recargo = costo_renta * 0.1 * dias_retraso  # 10% por día de retraso
-                    total = costo_renta + recargo
-                    
-                    messagebox.showinfo(
-                        "Cálculo de Recargo",
-                        f"Cliente: {cliente}\n"
-                        f"Película: {pelicula}\n"
-                        f"Días de retraso: {dias_retraso}\n"
-                        f"Costo renta: ${costo_renta:.2f}\n"
-                        f"Recargo: ${recargo:.2f}\n"
-                        f"Total a pagar: ${total:.2f}"
-                    )
-                else:
-                    messagebox.showinfo(
-                        "Sin Recargo",
-                        f"Cliente: {cliente}\n"
-                        f"Película: {pelicula}\n"
-                        f"No hay recargo. La renta está al día."
-                    )
-
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo calcular el recargo: {e}")
-
     def mostrar_devoluciones(self):
         """Cambiar a vista de devoluciones"""
         self.destroy()
@@ -344,5 +380,3 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = RentaView(root)
     app.mainloop()
-
-    

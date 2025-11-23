@@ -15,9 +15,6 @@ class MenuPrincipal(tk.Tk):
         self.resizable(False, False)
         self.configure(bg="#000000")
 
-        # Centrar ventana
-        self.center_window()
-
         # Conexión a la base de datos
         self.connection_string = (
             "DRIVER={SQL Server};"
@@ -29,10 +26,14 @@ class MenuPrincipal(tk.Tk):
         # Construir interfaz
         self.create_login_interface()
 
+        # Centrar ventana DESPUÉS de crear los widgets
+        self.after(100, self.center_window)
+
     def center_window(self):
+        """Centrar ventana en la pantalla"""
         self.update_idletasks()
-        width = self.winfo_width()
-        height = self.winfo_height()
+        width = 1000
+        height = 700
         x = (self.winfo_screenwidth() // 2) - (width // 2)
         y = (self.winfo_screenheight() // 2) - (height // 2)
         self.geometry(f"{width}x{height}+{x}+{y}")
@@ -56,7 +57,7 @@ class MenuPrincipal(tk.Tk):
             text="CINEMA PLAY",
             font=("Arial", 32, "bold"),
             bg="#000000",
-            fg="#E50914"  # Rojo estilo Netflix
+            fg="#E50914"
         )
         logo_label.pack(side="left")
 
@@ -139,7 +140,7 @@ class MenuPrincipal(tk.Tk):
             fg="#FFFFFF",
             insertbackground="#FFFFFF",
             relief="flat",
-            show="*"  # Mostrar asteriscos para la contraseña
+            show="*"
         )
         self.password_entry.grid(row=1, column=1, padx=(0, 10), pady=(0, 15))
 
@@ -178,6 +179,9 @@ class MenuPrincipal(tk.Tk):
         )
         footer_label.pack()
 
+        # Hacer focus en el campo de email al iniciar
+        self.email_entry.focus()
+
     def verificar_usuario(self):
         """Verificar el email y contraseña en la base de datos y redirigir según el rol"""
         email = self.email_entry.get().strip()
@@ -208,7 +212,10 @@ class MenuPrincipal(tk.Tk):
                 conn.close()
                 return
 
-            id_datos, nombre, apellido, contraseña_almacenada = datos_usuario
+            id_datos = datos_usuario[0]
+            nombre = datos_usuario[1]
+            apellido = datos_usuario[2]
+            contraseña_almacenada = datos_usuario[3]
 
             # Verificar contraseña (comparar hash)
             password_hash = self.hash_password(password)
@@ -243,22 +250,37 @@ class MenuPrincipal(tk.Tk):
                     "Tu cuenta no tiene un rol asignado. Contacta al administrador."
                 )
 
+        except pyodbc.Error as e:
+            messagebox.showerror("Error de Base de Datos", f"No se pudo conectar a la base de datos: {e}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo verificar el usuario: {e}")
 
     def abrir_panel_empleado(self, nombre, apellido, id_datos):
         """Abrir panel de administrador/empleado"""
         try:
+            # Importación diferida para evitar problemas circulares
             from empleado_view import EmpleadoView
-            self.withdraw()
-            ventana = EmpleadoView(self, f"{nombre} {apellido}")
-            ventana.grab_set()
+            
+            self.withdraw()  # Ocultar ventana principal
+            
+            # Crear ventana de empleado
+            empleado_window = tk.Toplevel(self)
+            app_empleado = EmpleadoView(empleado_window, f"{nombre} {apellido}")
+            
+            # Configurar comportamiento al cerrar
+            empleado_window.protocol("WM_DELETE_WINDOW", lambda: self.cerrar_ventana_secundaria(empleado_window))
+            
+        except ImportError as e:
+            messagebox.showerror("Error", f"No se encontró el módulo empleado_view: {e}")
+            self.deiconify()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir el panel de empleado: {e}")
+            self.deiconify()
 
     def abrir_panel_cliente(self, nombre, apellido, id_datos):
         """Abrir panel de cliente"""
         try:
+            # Importación diferida para evitar problemas circulares
             from cliente_view import CatalogoPeliculasView
             
             # Obtener el id_cliente
@@ -270,11 +292,26 @@ class MenuPrincipal(tk.Tk):
             
             id_cliente = cliente_data[0] if cliente_data else None
             
-            self.withdraw()
-            ventana = CatalogoPeliculasView(self, f"{nombre} {apellido}", id_cliente)
-            ventana.grab_set()
+            self.withdraw()  # Ocultar ventana principal
+            
+            # Crear ventana de cliente
+            cliente_window = tk.Toplevel(self)
+            app_cliente = CatalogoPeliculasView(cliente_window, f"{nombre} {apellido}", id_cliente)
+            
+            # Configurar comportamiento al cerrar
+            cliente_window.protocol("WM_DELETE_WINDOW", lambda: self.cerrar_ventana_secundaria(cliente_window))
+            
+        except ImportError as e:
+            messagebox.showerror("Error", f"No se encontró el módulo cliente_view: {e}")
+            self.deiconify()
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir el catálogo de usuario: {e}")
+            self.deiconify()
+
+    def cerrar_ventana_secundaria(self, ventana):
+        """Manejar el cierre de ventanas secundarias"""
+        ventana.destroy()
+        self.mostrar_menu_principal()
 
     def mostrar_menu_principal(self):
         """Mostrar ventana principal cuando se cierren las otras"""
@@ -287,3 +324,5 @@ class MenuPrincipal(tk.Tk):
 if __name__ == "__main__":
     app = MenuPrincipal()
     app.mainloop()
+
+    
