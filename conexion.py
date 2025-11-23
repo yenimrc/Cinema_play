@@ -5,7 +5,7 @@ try:
     # Cadena de conexión
     conn = pyodbc.connect(
         "DRIVER={ODBC Driver 17 for SQL Server};"
-        "SERVER=localhost;"
+        "SERVER=LAPTOP-N1LR75PN;"
         "DATABASE=cineplus;"
         "Trusted_Connection=yes;"
     )
