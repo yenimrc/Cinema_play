@@ -253,6 +253,34 @@ class EmpleadoView(tk.Toplevel):
             messagebox.showerror("Error", f"No se pudo realizar la búsqueda: {e}")
 
 
+    def actualizar_lista_peliculas(self):
+        """Actualizar la lista de películas en el catálogo"""
+        try:
+            # Limpiar treeview
+            for item in self.tree_peliculas.get_children():
+                self.tree_peliculas.delete(item)
+            
+            # Recargar datos
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT id_pelicula, nombre, genero, duracion, costo_renta FROM Pelicula ORDER BY nombre")
+            peliculas = cursor.fetchall()
+            
+            for pelicula in peliculas:
+                id_pelicula, nombre, genero, duracion, precio = pelicula
+                self.tree_peliculas.insert("", "end", values=(
+                    id_pelicula, 
+                    nombre, 
+                    genero, 
+                    f"{duracion} min", 
+                    f"${precio}"
+                ))
+                
+            print("✅ Lista de películas actualizada correctamente")
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudieron actualizar las películas: {e}")
+            
+
     def agregar_pelicula(self):
         """Abrir ventana para agregar nueva película"""
         try:

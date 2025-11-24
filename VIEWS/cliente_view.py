@@ -170,6 +170,17 @@ class CatalogoPeliculasView(tk.Toplevel):
         frame_botones = tk.Frame(main_frame, bg='#f4f4f9')
         frame_botones.pack(pady=10)
         
+         # Botón "Mis Rentas" - NUEVO
+        btn_mis_rentas = ttk.Button(frame_botones, 
+                                  text="📋 Mis Rentas Activas", 
+                                  command=self.ver_mis_rentas,
+                                  style='Actualizar.TButton')
+        btn_mis_rentas.grid(row=0, column=0, padx=10)
+        
+        # Frame de botones de acción SECUNDARIO (los botones originales)
+        frame_botones = tk.Frame(main_frame, bg='#f4f4f9')
+        frame_botones.pack(pady=5)
+        
         btn_rentar = ttk.Button(frame_botones, 
                               text="🎟️ RENTAR PELÍCULA", 
                               command=self.rentar_pelicula,
@@ -207,11 +218,16 @@ class CatalogoPeliculasView(tk.Toplevel):
             cursor.execute("""
                 SELECT p.id_pelicula, p.nombre, p.genero, p.duracion, p.costo_renta,
                     CASE 
-                        WHEN EXISTS (SELECT 1 FROM Renta r WHERE r.id_pelicula = p.id_pelicula AND r.estado = 'Activa') 
-                        THEN ' Rentada :(' 
-                        ELSE ' Disponible :D' 
+                        WHEN EXISTS (
+                            SELECT 1 FROM Renta r 
+                            WHERE r.id_pelicula = p.id_pelicula 
+                            AND r.estado = 'Activa'
+                        ) 
+                        THEN 'Rentada :(' 
+                        ELSE 'Disponible :D' 
                     END as estado
                 FROM Pelicula p
+                ORDER BY p.nombre
             """)
             peliculas = cursor.fetchall()
             
@@ -279,80 +295,316 @@ class CatalogoPeliculasView(tk.Toplevel):
                 messagebox.showinfo("Búsqueda", f"No se encontró la película: {nombre}")
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo realizar la búsqueda:\n{e}")
-    
+
+
+    def ver_mis_rentas(self):
+        """Ver las rentas activas del usuario"""
+        try:
+            if not self.conn:
+                messagebox.showerror("Error", "No hay conexión a la base de datos")
+                return
+                
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT 
+                    r.id_renta,
+                    p.nombre as pelicula,
+                    r.fecha_inicio,
+                    r.fecha_devolucion,
+                    DATEDIFF(day, GETDATE(), r.fecha_devolucion) as dias_restantes
+                FROM Renta r
+                JOIN Pelicula p ON r.id_pelicula = p.id_pelicula
+                WHERE r.id_cliente = ? AND r.estado = 'Activa'
+                ORDER BY r.fecha_devolucion
+            """, self.id_cliente)
+            
+            rentas = cursor.fetchall()
+            
+            if not rentas:
+                messagebox.showinfo("Mis Rentas", "No tienes películas rentadas actualmente.")
+                return
+            
+            # Crear ventana para mostrar rentas
+            ventana_rentas = tk.Toplevel(self)
+            ventana_rentas.title("📋 Mis Rentas Activas")
+            ventana_rentas.geometry("700x400")
+            ventana_rentas.configure(bg='#f4f4f9')
+            
+            tk.Label(
+                ventana_rentas,
+                text="🎬 Mis Rentas Activas",
+                font=('Verdana', 14, 'bold'),
+                bg='#f4f4f9',
+                fg="#000000"
+            ).pack(pady=10)
+            
+            # Tabla de rentas
+            frame_tabla = tk.Frame(ventana_rentas, bg="#f4f4f9")
+            frame_tabla.pack(fill='both', expand=True, padx=20, pady=10)
+            
+            columnas = ("ID", "Película", "Fecha Inicio", "Fecha Devolución", "Días Restantes")
+            tabla = ttk.Treeview(frame_tabla, columns=columnas, show="headings", height=10)
+            
+            for col in columnas:
+                tabla.heading(col, text=col)
+                tabla.column(col, width=120, anchor='center')
+            
+            # Insertar datos
+            for renta in rentas:
+                id_renta, pelicula, fecha_inicio, fecha_devolucion, dias_restantes = renta
+                
+                # ✅ CORREGIDO: Manejar fechas como strings o datetime
+                try:
+                    # Si es datetime, formatear
+                    if hasattr(fecha_inicio, 'strftime'):
+                        fecha_inicio_str = fecha_inicio.strftime("%d/%m/%Y")
+                    else:
+                        # Si ya es string, usar directamente o convertir
+                        fecha_inicio_str = str(fecha_inicio)
+                    
+                    if hasattr(fecha_devolucion, 'strftime'):
+                        fecha_devolucion_str = fecha_devolucion.strftime("%d/%m/%Y")
+                    else:
+                        fecha_devolucion_str = str(fecha_devolucion)
+                        
+                except Exception as e:
+                    # En caso de error, mostrar valores originales
+                    fecha_inicio_str = str(fecha_inicio) if fecha_inicio else "N/A"
+                    fecha_devolucion_str = str(fecha_devolucion) if fecha_devolucion else "N/A"
+                
+                dias_texto = f"{dias_restantes} días" if dias_restantes >= 0 else f"Vencida ({abs(dias_restantes)} días)"
+                
+                tabla.insert("", "end", values=(
+                    id_renta,
+                    pelicula,
+                    fecha_inicio_str,
+                    fecha_devolucion_str,
+                    dias_texto
+                ))
+            
+            scrollbar = ttk.Scrollbar(frame_tabla, orient="vertical", command=tabla.yview)
+            tabla.configure(yscrollcommand=scrollbar.set)
+            
+            tabla.pack(side='left', fill='both', expand=True)
+            scrollbar.pack(side='right', fill='y')
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudieron cargar las rentas:\n{e}")
+
     def rentar_pelicula(self):
-        """Rentar la película seleccionada - IMPLEMENTACIÓN COMPLETA"""
+        """Rentar película seleccionada"""
         seleccion = self.tabla.selection()
         if not seleccion:
-            messagebox.showwarning("Advertencia", "Por favor seleccione una película para rentar.")
+            messagebox.showwarning("Advertencia", "Por favor selecciona una película para rentar.")
             return
+
+        try:
+            item = self.tabla.item(seleccion[0])
+            valores = item['values']
+            id_pelicula = int(valores[0])  # ✅ Asegurar que sea INT
+            titulo_pelicula = valores[1]
             
-        item = self.tabla.item(seleccion[0])
-        datos = item['values']
-        id_pelicula = datos[0]
-        nombre_pelicula = datos[1]
-        precio = datos[4]
-        estado = datos[5]
+            precio_str = valores[4].replace('$', '').strip()
+            precio = float(precio_str)
+
+            # Verificar disponibilidad
+            estado = valores[5] if len(valores) > 5 else ""
+            if "Rentada" in estado:
+                messagebox.showwarning("No Disponible", f"La película '{titulo_pelicula}' ya está rentada.")
+                return
+
+            respuesta = messagebox.askyesno(
+                "Confirmar Renta",
+                f"¿Rentar '{titulo_pelicula}' por ${precio:.2f}?"
+            )
+
+            if respuesta:
+                cursor = self.conn.cursor()
+                cursor.execute("""
+                    INSERT INTO Renta (id_cliente, id_pelicula, fecha_inicio, fecha_devolucion, estado)
+                    VALUES (?, ?, GETDATE(), DATEADD(day, 7, GETDATE()), 'Activa')
+                """, self.id_cliente, id_pelicula)
+
+                self.conn.commit()
+
+                messagebox.showinfo("Éxito", f"✅ '{titulo_pelicula}' rentada correctamente!")
+                self.cargar_peliculas()
+
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo completar la renta: {e}")
+
+    def devolver_pelicula(self):
+        """Devolver película rentada por el usuario"""
+        try:
+            if not self.conn:
+                messagebox.showerror("Error", "No hay conexión a la base de datos")
+                return
+                
+            # Obtener rentas activas del usuario
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT r.id_renta, p.nombre, r.fecha_inicio, r.fecha_devolucion
+                FROM Renta r
+                JOIN Pelicula p ON r.id_pelicula = p.id_pelicula
+                WHERE r.id_cliente = ? AND r.estado = 'Activa'
+                ORDER BY r.fecha_devolucion
+            """, self.id_cliente)
+            
+            rentas_activas = cursor.fetchall()
+            
+            if not rentas_activas:
+                messagebox.showinfo(
+                    "Devolución", 
+                    "No tienes películas rentadas actualmente."
+                )
+                return
+            
+            # Crear ventana de selección
+            self.mostrar_ventana_devolucion(rentas_activas)
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudieron cargar las rentas activas:\n{e}")
+
+    def mostrar_ventana_devolucion(self, rentas_activas):
+        """Mostrar ventana para seleccionar película a devolver"""
+        ventana_devolucion = tk.Toplevel(self)
+        ventana_devolucion.title("📦 Devolver Película")
+        ventana_devolucion.geometry("600x400")
+        ventana_devolucion.configure(bg='#f4f4f9')
+        ventana_devolucion.transient(self)
+        ventana_devolucion.grab_set()
         
-        if "Rentada" in estado:
-            messagebox.showwarning("No disponible", f"La película '{nombre_pelicula}' ya está rentada.")
+        # Título
+        tk.Label(
+            ventana_devolucion,
+            text="🎬 Selecciona la Película a Devolver",
+            font=('Verdana', 14, 'bold'),
+            bg='#f4f4f9',
+            fg="#000000"
+        ).pack(pady=10)
+        
+        # Frame de la tabla
+        frame_tabla = tk.Frame(ventana_devolucion, bg="#f4f4f9")
+        frame_tabla.pack(fill='both', expand=True, padx=20, pady=10)
+        
+        # Tabla de rentas activas
+        columnas = ("ID Renta", "Película", "Fecha Inicio", "Fecha Límite")
+        tabla_rentas = ttk.Treeview(
+            frame_tabla, 
+            columns=columnas, 
+            show="headings",
+            height=8
+        )
+        
+        # Configurar columnas
+        for col in columnas:
+            tabla_rentas.heading(col, text=col)
+            tabla_rentas.column(col, width=120, anchor='center')
+        
+        # Scrollbar
+        scrollbar = ttk.Scrollbar(frame_tabla, orient="vertical", command=tabla_rentas.yview)
+        tabla_rentas.configure(yscrollcommand=scrollbar.set)
+        
+        # Insertar datos
+        for renta in rentas_activas:
+            id_renta, pelicula, fecha_inicio, fecha_devolucion = renta
+            
+            # ✅ CORREGIDO: Manejar fechas correctamente
+            try:
+                if hasattr(fecha_inicio, 'strftime'):
+                    fecha_inicio_str = fecha_inicio.strftime("%d/%m/%Y")
+                else:
+                    fecha_inicio_str = str(fecha_inicio)
+                
+                if hasattr(fecha_devolucion, 'strftime'):
+                    fecha_devolucion_str = fecha_devolucion.strftime("%d/%m/%Y")
+                else:
+                    fecha_devolucion_str = str(fecha_devolucion)
+                    
+            except Exception:
+                fecha_inicio_str = str(fecha_inicio) if fecha_inicio else "N/A"
+                fecha_devolucion_str = str(fecha_devolucion) if fecha_devolucion else "N/A"
+            
+            tabla_rentas.insert("", "end", values=(
+                id_renta,
+                pelicula,
+                fecha_inicio_str,
+                fecha_devolucion_str
+            ))
+        
+        tabla_rentas.pack(side='left', fill='both', expand=True)
+        scrollbar.pack(side='right', fill='y')
+        
+        # Frame de botones
+        frame_botones = tk.Frame(ventana_devolucion, bg='#f4f4f9')
+        frame_botones.pack(pady=10)
+        
+        # Botón devolver
+        btn_devolver = ttk.Button(
+            frame_botones,
+            text="✅ Devolver Película Seleccionada",
+            command=lambda: self.procesar_devolucion(tabla_rentas, ventana_devolucion),
+            style='Devolver.TButton'
+        )
+        btn_devolver.pack(side='left', padx=10)
+        
+        # Botón cancelar
+        btn_cancelar = ttk.Button(
+            frame_botones,
+            text="❌ Cancelar",
+            command=ventana_devolucion.destroy
+        )
+        btn_cancelar.pack(side='left', padx=10)
+
+    def procesar_devolucion(self, tabla_rentas, ventana_devolucion):
+        """Procesar la devolución de la película seleccionada"""
+        seleccion = tabla_rentas.selection()
+        if not seleccion:
+            messagebox.showwarning("Advertencia", "Por favor selecciona una película para devolver.")
             return
         
-        # Confirmar renta
+        item = tabla_rentas.item(seleccion[0])
+        valores = item['values']
+        id_renta = valores[0]
+        nombre_pelicula = valores[1]
+        
+        # Confirmar devolución
         respuesta = messagebox.askyesno(
-            "Confirmar Renta",
-            f"¿Desea rentar la película?\n\n"
-            f"Película: {nombre_pelicula}\n"
-            f"Precio: {precio}\n\n"
-            f"La renta tendrá una duración de 7 días."
+            "Confirmar Devolución",
+            f"¿Estás seguro de devolver la película:\n\n"
+            f"🎬 {nombre_pelicula}\n\n"
+            f"Esta acción no se puede deshacer."
         )
         
         if respuesta:
             try:
-                # Usar el id_cliente real del usuario logueado
-                if self.id_cliente:
-                    id_cliente = self.id_cliente
-                else:
-                    # Fallback si no hay ID (usar 1 como ejemplo)
-                    id_cliente = 1
-                    messagebox.showwarning("Advertencia", "Usando cliente de prueba. ID no especificado.")
-                
-                
-                # Calcular fechas
-                from datetime import datetime, timedelta
-                fecha_inicio = datetime.now().date()
-                fecha_devolucion = fecha_inicio + timedelta(days=7)
-                
+                # Realizar la devolución
                 cursor = self.conn.cursor()
-                
-                # Insertar renta
                 cursor.execute("""
-                    INSERT INTO Renta (id_cliente, id_pelicula, fecha_inicio, fecha_devolucion, estado)
-                    VALUES (?, ?, ?, ?, 'Activa')
-                """, id_cliente, id_pelicula, fecha_inicio, fecha_devolucion)
+                    UPDATE Renta 
+                    SET estado = 'Devuelto', fecha_devolucion = GETDATE()
+                    WHERE id_renta = ?
+                """, id_renta)
                 
                 self.conn.commit()
                 
                 messagebox.showinfo(
-                    "Éxito", 
-                    f"✅ Película '{nombre_pelicula}' rentada exitosamente!\n\n"
-                    f"📅 Fecha de devolución: {fecha_devolucion.strftime('%d/%m/%Y')}\n"
-                    f"💰 Precio: {precio}"
+                    "Devolución Exitosa",
+                    f"✅ Película devuelta correctamente:\n\n"
+                    f"🎬 {nombre_pelicula}\n\n"
+                    f"¡Gracias por tu preferencia!"
                 )
-                self.cargar_peliculas()  # Actualizar la vista
+                
+                # Cerrar ventana y actualizar
+                ventana_devolucion.destroy()
+                self.cargar_peliculas()  # Actualizar estado en el catálogo
                 
             except Exception as e:
-                messagebox.showerror("Error", f"No se pudo completar la renta: {e}")
-    
-    def devolver_pelicula(self):
-        """Devolver película rentada"""
-        messagebox.showinfo(
-        "Devolución", 
-        "Para devolver una película, por favor contacte a un empleado.\n\n"
-        "Los empleados pueden registrar devoluciones desde el panel de administración."
-    )
+                messagebox.showerror("Error", f"No se pudo procesar la devolución:\n{e}")
+
 
 if __name__ == "__main__":
     root = tk.Tk()
     app = CatalogoPeliculasView(root, "Cliente Ejemplo")
     app.mainloop()
+
