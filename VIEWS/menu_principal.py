@@ -4,6 +4,11 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 import pyodbc
 import hashlib
+import sys
+import os
+
+# Agregar directorios para importaciones
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
 
 class MenuPrincipal(tk.Tk):
     def __init__(self):
@@ -161,6 +166,23 @@ class MenuPrincipal(tk.Tk):
         )
         self.start_button.grid(row=2, column=0, columnspan=2, pady=(20, 0))
 
+        # Botón de registro (agregar esto después del botón "Comenzar")
+        registro_button = tk.Button(
+            login_frame,
+            text="📝 Registrarse",
+            font=("Arial", 11),
+            bg="#333333",
+            fg="#FFFFFF",
+            activebackground="#555555",
+            activeforeground="#FFFFFF",
+            relief="flat",
+            cursor="hand2",
+            command=self.abrir_registro,
+            padx=20,
+            pady=8
+        )
+        registro_button.grid(row=3, column=0, columnspan=2, pady=(10, 0))
+
         # Enlace para presionar Enter
         self.email_entry.bind("<Return>", lambda e: self.password_entry.focus())
         self.password_entry.bind("<Return>", lambda e: self.verificar_usuario())
@@ -239,12 +261,21 @@ class MenuPrincipal(tk.Tk):
 
             conn.close()
 
+            # ✅ AGREGAR DEBUG AQUÍ
+            print(f"🔍 DEBUG - Usuario: {nombre} {apellido}")
+            print(f"🔍 DEBUG - ID Datos: {id_datos}")
+            print(f"🔍 DEBUG - Es empleado: {empleado is not None}")
+            print(f"🔍 DEBUG - Es cliente: {cliente is not None}")
+
             # Redirigir según el rol
             if empleado:
+                print("🎯 Redirigiendo a PANEL EMPLEADO")
                 self.abrir_panel_empleado(nombre, apellido, id_datos)
             elif cliente:
+                print("🎯 Redirigiendo a CATÁLOGO CLIENTE")
                 self.abrir_panel_cliente(nombre, apellido, id_datos)
             else:
+                print("❌ Usuario sin rol definido")
                 messagebox.showwarning(
                     "Rol no definido", 
                     "Tu cuenta no tiene un rol asignado. Contacta al administrador."
@@ -259,7 +290,7 @@ class MenuPrincipal(tk.Tk):
         """Abrir panel de administrador/empleado"""
         try:
             # Importación diferida para evitar problemas circulares
-            from empleado_view import EmpleadoView
+            from VIEWS.empleado_view import EmpleadoView
             
             self.withdraw()  # Ocultar ventana principal
             
@@ -276,12 +307,12 @@ class MenuPrincipal(tk.Tk):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo abrir el panel de empleado: {e}")
             self.deiconify()
+            self.deiconify()
 
     def abrir_panel_cliente(self, nombre, apellido, id_datos):
-        """Abrir panel de cliente"""
+        """Abrir panel de cliente - CATÁLOGO de películas"""
         try:
-            # Importación diferida para evitar problemas circulares
-            from cliente_view import CatalogoPeliculasView
+            print(f"🔍 Intentando abrir panel CLIENTE para: {nombre} {apellido}")
             
             # Obtener el id_cliente
             conn = pyodbc.connect(self.connection_string)
@@ -291,20 +322,32 @@ class MenuPrincipal(tk.Tk):
             conn.close()
             
             id_cliente = cliente_data[0] if cliente_data else None
+            print(f"🔍 ID Cliente obtenido: {id_cliente}")
+            
+            # ✅ VERIFICAR: ¿Qué vista se está importando?
+            try:
+                from VIEWS.cliente_view import CatalogoPeliculasView
+                print("✅ CatalogoPeliculasView importado correctamente")
+            except ImportError as e:
+                print(f"❌ Error importando CatalogoPeliculasView: {e}")
+                raise
             
             self.withdraw()  # Ocultar ventana principal
             
             # Crear ventana de cliente
             cliente_window = tk.Toplevel(self)
             app_cliente = CatalogoPeliculasView(cliente_window, f"{nombre} {apellido}", id_cliente)
+            print("✅ CatalogoPeliculasView creado correctamente")
             
             # Configurar comportamiento al cerrar
             cliente_window.protocol("WM_DELETE_WINDOW", lambda: self.cerrar_ventana_secundaria(cliente_window))
             
         except ImportError as e:
+            print(f"❌ Error de importación: {e}")
             messagebox.showerror("Error", f"No se encontró el módulo cliente_view: {e}")
             self.deiconify()
         except Exception as e:
+            print(f"❌ Error al abrir catálogo: {e}")
             messagebox.showerror("Error", f"No se pudo abrir el catálogo de usuario: {e}")
             self.deiconify()
 
@@ -312,6 +355,16 @@ class MenuPrincipal(tk.Tk):
         """Manejar el cierre de ventanas secundarias"""
         ventana.destroy()
         self.mostrar_menu_principal()
+        
+    def abrir_registro(self):
+        """Abrir ventana de registro"""
+        try:
+            from VIEWS.registro_view import RegistroView
+            registro_window = RegistroView(self)
+            registro_window.grab_set()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir el registro: {e}")
+
 
     def mostrar_menu_principal(self):
         """Mostrar ventana principal cuando se cierren las otras"""
@@ -321,8 +374,7 @@ class MenuPrincipal(tk.Tk):
         self.password_entry.delete(0, tk.END)
         self.email_entry.focus()
 
-if __name__ == "__main__":
-    app = MenuPrincipal()
-    app.mainloop()
+#if __name__ == "__main__":
+ #   app = MenuPrincipal()
+ #   app.mainloop()
 
-    
