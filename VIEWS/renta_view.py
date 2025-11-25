@@ -260,7 +260,7 @@ class RentaView(tk.Toplevel):
             return "Fecha inválida"
 
     def calcular_recargo(self):
-        """Calcular recargo por retraso"""
+        """Calcular recargo por retraso - VERSIÓN CORREGIDA"""
         seleccion = self.tabla.selection()
         if not seleccion:
             messagebox.showwarning("Advertencia", "Por favor seleccione una renta para calcular recargo.")
@@ -277,55 +277,124 @@ class RentaView(tk.Toplevel):
             
             # Obtener información de la renta
             cursor.execute("""
-                SELECT r.fecha_devolucion, p.costo_renta
+                SELECT r.fecha_devolucion, p.costo_renta, p.nombre
                 FROM Renta r
                 JOIN Pelicula p ON r.id_pelicula = p.id_pelicula
                 WHERE r.id_renta = ?
             """, id_renta)
             
             resultado = cursor.fetchone()
-            if resultado:
-                fecha_limite, costo_renta = resultado
+            if not resultado:
+                messagebox.showerror("Error", "No se encontró la renta especificada.")
+                return
                 
-                # ✅ CORRECCIÓN: Validar que fecha_limite no sea None
-                if fecha_limite is None:
-                    messagebox.showwarning("Error", "No se encontró fecha límite para esta renta.")
-                    return
+            fecha_limite, costo_renta, nombre_pelicula = resultado
+            
+            # ✅ CORRECCIÓN COMPLETA: Manejo robusto de fechas
+            from datetime import datetime, date
+            
+            fecha_hoy = date.today()
+            
+            # Convertir fecha_limite a date de forma segura
+            if fecha_limite is None:
+                messagebox.showwarning("Error", "No se encontró fecha límite para esta renta.")
+                return
+            
+            if isinstance(fecha_limite, date):
+                # Ya es datetime.date, usar directamente
+                fecha_limite_date = fecha_limite
+            elif isinstance(fecha_limite, datetime):
+                # Es datetime.datetime, extraer date
+                fecha_limite_date = fecha_limite.date()
+            elif isinstance(fecha_limite, str):
+                # Es string, convertir según formato
+                try:
+                    # Intentar formato YYYY-MM-DD (formato de SQL Server)
+                    fecha_limite_date = datetime.strptime(fecha_limite, '%Y-%m-%d').date()
+                except ValueError:
+                    try:
+                        # Intentar formato DD/MM/YYYY
+                        fecha_limite_date = datetime.strptime(fecha_limite, '%d/%m/%Y').date()
+                    except ValueError:
+                        messagebox.showerror("Error", f"Formato de fecha no reconocido: {fecha_limite}")
+                        return
+            else:
+                messagebox.showerror("Error", f"Tipo de fecha no soportado: {type(fecha_limite)}")
+                return
+            
+            # Calcular días de retraso
+            dias_retraso = (fecha_hoy - fecha_limite_date).days
+            
+            if dias_retraso > 0:
+                # Calcular recargo (10% del costo por día de retraso)
+                recargo_por_dia = costo_renta * 0.10
+                recargo_total = recargo_por_dia * dias_retraso
+                total_a_pagar = costo_renta + recargo_total
                 
-                # ✅ CORRECCIÓN: Asegurarse de que ambas fechas sean objetos date
-                fecha_hoy = datetime.now().date()
-                if hasattr(fecha_limite, 'date'):
-                    fecha_limite_date = fecha_limite.date()
-                else:
-                    fecha_limite_date = fecha_limite
+                mensaje = (
+                    f"📋 CÁLCULO DE RECARGO\n\n"
+                    f"👤 Cliente: {cliente}\n"
+                    f"🎬 Película: {nombre_pelicula}\n"
+                    f"📅 Fecha Límite: {fecha_limite_date.strftime('%d/%m/%Y')}\n"
+                    f"📅 Fecha Actual: {fecha_hoy.strftime('%d/%m/%Y')}\n"
+                    f"⏰ Días de Retraso: {dias_retraso} días\n"
+                    f"💰 Costo Original: ${costo_renta:.2f}\n"
+                    f"💸 Recargo por Mora: ${recargo_total:.2f}\n"
+                    f"💵 TOTAL A PAGAR: ${total_a_pagar:.2f}"
+                )
                 
-                dias_retraso = (fecha_hoy - fecha_limite_date).days
+                messagebox.showinfo("Cálculo de Recargo", mensaje)
                 
-                if dias_retraso > 0:
-                    recargo = costo_renta * 0.1 * dias_retraso  # 10% por día de retraso
-                    total = costo_renta + recargo
+                # Preguntar si quiere aplicar el recargo
+                respuesta = messagebox.askyesno(
+                    "Aplicar Recargo", 
+                    "¿Desea aplicar este recargo y registrar la devolución?"
+                )
+                
+                if respuesta:
+                    self.aplicar_recargo_y_devolucion(id_renta, recargo_total)
                     
-                    messagebox.showinfo(
-                        "Cálculo de Recargo",
-                        f"Cliente: {cliente}\n"
-                        f"Película: {pelicula}\n"
-                        f"Días de retraso: {dias_retraso}\n"
-                        f"Costo renta: ${costo_renta:.2f}\n"
-                        f"Recargo: ${recargo:.2f}\n"
-                        f"Total a pagar: ${total:.2f}"
-                    )
-                else:
-                    messagebox.showinfo(
-                        "Sin Recargo",
-                        f"Cliente: {cliente}\n"
-                        f"Película: {pelicula}\n"
-                        f"No hay recargo. La renta está al día."
-                    )
+            else:
+                messagebox.showinfo(
+                    "Sin Recargo",
+                    f"✅ No hay recargo para esta renta.\n\n"
+                    f"Cliente: {cliente}\n"
+                    f"Película: {nombre_pelicula}\n"
+                    f"Fecha límite: {fecha_limite_date.strftime('%d/%m/%Y')}\n"
+                    f"La renta está al día."
+                )
 
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo calcular el recargo: {e}")
+            messagebox.showerror("Error", f"No se pudo calcular el recargo:\n{str(e)}")
 
-    # ... (el resto de los métodos permanecen igual)
+    def aplicar_recargo_y_devolucion(self, id_renta, recargo):
+        """Aplicar recargo y registrar devolución"""
+        try:
+            cursor = self.conn.cursor()
+            
+            # Actualizar renta como devuelta y guardar recargo
+            cursor.execute("""
+                UPDATE Renta 
+                SET estado = 'Devuelto', 
+                    fecha_devolucion_real = GETDATE(),
+                    recargo_mora = ?
+                WHERE id_renta = ?
+            """, recargo, id_renta)
+            
+            self.conn.commit()
+            
+            messagebox.showinfo(
+                "Éxito", 
+                f"✅ Devolución registrada con recargo aplicado.\n\n"
+                f"Recargo: ${recargo:.2f}"
+            )
+            
+            # Actualizar la vista
+            self.cargar_datos()
+            
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo aplicar el recargo:\n{e}")
+
     def registrar_devolucion(self):
         """Registrar devolución de una renta seleccionada"""
         seleccion = self.tabla.selection()
