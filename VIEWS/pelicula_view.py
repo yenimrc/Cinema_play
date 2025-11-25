@@ -361,45 +361,6 @@ class PeliculaView(tk.Toplevel):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo actualizar la película: {e}")
 
-    def actualizar_pelicula(self):
-        """Actualizar película existente en la base de datos"""
-        if not self.validar_campos():
-            return
-
-        if not self.conn:
-            messagebox.showerror("Error", "No hay conexión a la base de datos")
-            return
-
-        try:
-            titulo = self.titulo_entry.get().strip()
-            genero = self.genero_combo.get().strip()
-            duracion = float(self.duracion_entry.get().strip())
-            precio = float(self.precio_entry.get().strip())
-
-            cursor = self.conn.cursor()
-            
-            # Verificar si ya existe otra película con el mismo nombre (excluyendo la actual)
-            cursor.execute("SELECT COUNT(*) FROM Pelicula WHERE nombre = ? AND id_pelicula != ?", 
-                          titulo, self.pelicula_id)
-            if cursor.fetchone()[0] > 0:
-                messagebox.showwarning("Duplicado", f"Ya existe otra película con el título: {titulo}")
-                return
-
-            # Actualizar película
-            cursor.execute("""
-                UPDATE Pelicula 
-                SET nombre = ?, genero = ?, duracion = ?, costo_renta = ?
-                WHERE id_pelicula = ?
-            """, titulo, genero, duracion, precio, self.pelicula_id)
-
-            self.conn.commit()
-
-            messagebox.showinfo("Éxito", f"Película '{titulo}' actualizada correctamente.")
-            self.cargar_peliculas()
-            # No limpiar campos en edición, mantener datos actualizados
-
-        except Exception as e:
-            messagebox.showerror("Error", f"No se pudo actualizar la película: {e}")
 
     def limpiar_campos(self):
         """Limpiar todos los campos del formulario"""
