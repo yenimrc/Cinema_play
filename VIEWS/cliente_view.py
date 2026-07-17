@@ -58,16 +58,22 @@ class CatalogoPeliculasView(tk.Toplevel):
                            padding=(12, 6))
         
         self.style.configure('Devolver.TButton',
-                           background="#1c66dc",
+                           background="#34b021",
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
         
         self.style.configure('Actualizar.TButton',
-                           background="#afafc5",
+                           background="#797979",
                            foreground='black',
                            font=('Verdana', 10, 'bold'),
                            padding=(12, 6))
+        
+        self.style.configure('Pago.TButton',
+                            background="#FFEA05", 
+                            foreground='black',     
+                            font=('Verdana', 10, 'bold'),
+                            padding=(12, 6))
         
         # Tabla
         self.style.configure('Custom.Treeview',
@@ -168,9 +174,8 @@ class CatalogoPeliculasView(tk.Toplevel):
         
         # Frame de botones de acción
         frame_botones = tk.Frame(main_frame, bg='#f4f4f9')
-        frame_botones.pack(pady=10)
+        frame_botones.pack(pady=15)
         
-         # Botón "Mis Rentas" - NUEVO
         btn_mis_rentas = ttk.Button(frame_botones, 
                                   text="📋 Mis Rentas Activas", 
                                   command=self.ver_mis_rentas,
@@ -185,19 +190,25 @@ class CatalogoPeliculasView(tk.Toplevel):
                               text="🎟️ RENTAR PELÍCULA", 
                               command=self.rentar_pelicula,
                               style='Rentar.TButton')
-        btn_rentar.grid(row=0, column=0, padx=10)
+        btn_rentar.grid(row=0, column=1, padx=10)
+
+        btn_metodos_pago = ttk.Button(frame_botones, 
+                                    text="💳 Métodos de Pago", 
+                                    command=self.abrir_metodos_pago,
+                                    style='Pago.TButton')  
+        btn_metodos_pago.grid(row=0, column=2, padx=10)  
         
         btn_devolver = ttk.Button(frame_botones, 
                                 text="📦 DEVOLVER PELÍCULA", 
                                 command=self.devolver_pelicula,
                                 style='Devolver.TButton')
-        btn_devolver.grid(row=0, column=1, padx=10)
+        btn_devolver.grid(row=0, column=3, padx=10)
         
         btn_actualizar = ttk.Button(frame_botones, 
                                   text="🔄 ACTUALIZAR CATÁLOGO", 
                                   command=self.cargar_peliculas,
                                   style='Actualizar.TButton')
-        btn_actualizar.grid(row=0, column=2, padx=10)
+        btn_actualizar.grid(row=0, column=4, padx=10)
         
         # Footer
         footer = tk.Label(main_frame, 
@@ -391,6 +402,51 @@ class CatalogoPeliculasView(tk.Toplevel):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudieron cargar las rentas:\n{e}")
 
+
+    def verificar_metodo_pago(self):
+        """Verificar si el cliente tiene método de pago configurado"""
+        try:
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT metodo_pago, tarjeta_numero, paypal_email 
+                FROM Cliente 
+                WHERE id_cliente = ?
+            """, self.id_cliente)
+            
+            datos = cursor.fetchone()
+            
+            if not datos:
+                return False, "No se encontró información del cliente"
+            
+            metodo_pago, tarjeta_numero, paypal_email = datos
+            
+            # Verificar si tiene algún método configurado
+            if not metodo_pago:
+                return False, "No tienes método de pago configurado"
+            
+            # Verificar según el método
+            if metodo_pago == "Tarjeta" and (not tarjeta_numero or len(tarjeta_numero) < 16):
+                return False, "Información de tarjeta incompleta"
+            
+            if metodo_pago == "PayPal" and not paypal_email:
+                return False, "Email de PayPal no configurado"
+            
+            return True, metodo_pago
+            
+        except Exception as e:
+            return False, f"Error al verificar: {str(e)}"
+
+
+    # Y agregar este método para abrir métodos de pago:
+    def abrir_metodos_pago(self):
+        """Abrir ventana de métodos de pago"""
+        try:
+            from VIEWS.metodo_pago_view import MetodoPagoView
+            ventana = MetodoPagoView(self, self.id_cliente)
+            ventana.grab_set()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir métodos de pago: {e}")
+
     def rentar_pelicula(self):
         """Rentar película seleccionada"""
         seleccion = self.tabla.selection()
@@ -401,7 +457,7 @@ class CatalogoPeliculasView(tk.Toplevel):
         try:
             item = self.tabla.item(seleccion[0])
             valores = item['values']
-            id_pelicula = int(valores[0])  # ✅ Asegurar que sea INT
+            id_pelicula = int(valores[0])
             titulo_pelicula = valores[1]
             
             precio_str = valores[4].replace('$', '').strip()
@@ -412,26 +468,82 @@ class CatalogoPeliculasView(tk.Toplevel):
             if "Rentada" in estado:
                 messagebox.showwarning("No Disponible", f"La película '{titulo_pelicula}' ya está rentada.")
                 return
-
+            
+            # Verificar método de pago
+            tiene_pago, mensaje_pago = self.verificar_metodo_pago()
+            
+            if not tiene_pago:
+                respuesta = messagebox.askyesno(
+                    "Método de Pago Requerido",
+                    f"{mensaje_pago}\n\n¿Deseas configurar tu método de pago ahora?"
+                )
+                
+                if respuesta:
+                    self.abrir_metodos_pago()
+                return
+            
+            # Obtener método de pago actual
+            cursor = self.conn.cursor()
+            cursor.execute("""
+                SELECT metodo_predeterminado, tarjeta_numero, paypal_email 
+                FROM Cliente 
+                WHERE id_cliente = ?
+            """, self.id_cliente)
+            
+            datos = cursor.fetchone()
+            metodo_pred, tarjeta_num, paypal_email = datos
+            
+            # Preparar mensaje con detalles del pago
+            detalles_pago = ""
+            if metodo_pred == "Tarjeta" and tarjeta_num:
+                ultimos_4 = tarjeta_num[-4:] if len(tarjeta_num) >= 4 else "****"
+                detalles_pago = f"💳 Tarjeta terminada en {ultimos_4}"
+            elif metodo_pred == "PayPal" and paypal_email:
+                detalles_pago = f"📱 PayPal: {paypal_email}"
+            
+            # Confirmar renta
             respuesta = messagebox.askyesno(
                 "Confirmar Renta",
-                f"¿Rentar '{titulo_pelicula}' por ${precio:.2f}?"
+                f"¿Rentar '{titulo_pelicula}' por ${precio:.2f}?\n\n"
+                f"Método de pago: {detalles_pago}\n"
+                f"El pago se procesará automáticamente."
             )
 
             if respuesta:
-                cursor = self.conn.cursor()
+                # Registrar la renta
                 cursor.execute("""
                     INSERT INTO Renta (id_cliente, id_pelicula, fecha_inicio, fecha_devolucion, estado)
-                    VALUES (?, ?, GETDATE(), DATEADD(day, 7, GETDATE()), 'Activa')
+                    VALUES (?, ?, GETDATE(), DATEADD(day, 2, GETDATE()), 'Activa')
                 """, self.id_cliente, id_pelicula)
+                
+                # Obtener ID de la renta recién creada
+                renta_id = cursor.execute("SELECT @@IDENTITY").fetchone()[0]
+                
+                # Registrar el pago en HistorialPagos
+                cursor.execute("""
+                    INSERT INTO HistorialPagos (id_cliente, id_renta, monto, metodo_pago)
+                    VALUES (?, ?, ?, ?)
+                """, self.id_cliente, renta_id, precio, metodo_pred)
 
                 self.conn.commit()
 
-                messagebox.showinfo("Éxito", f"✅ '{titulo_pelicula}' rentada correctamente!")
+                messagebox.showinfo("Éxito", 
+                                f"✅ '{titulo_pelicula}' rentada correctamente!\n"
+                                f"💰 Pago de ${precio:.2f} procesado exitosamente.")
                 self.cargar_peliculas()
 
         except Exception as e:
             messagebox.showerror("Error", f"No se pudo completar la renta: {e}")
+
+# Y agregar este método para abrir métodos de pago:
+    def abrir_metodos_pago(self):
+        """Abrir ventana de métodos de pago"""
+        try:
+            from VIEWS.metodo_pago_view import MetodoPagoView
+            ventana = MetodoPagoView(self, self.id_cliente)
+            ventana.grab_set()
+        except Exception as e:
+            messagebox.showerror("Error", f"No se pudo abrir métodos de pago: {e}")
 
     def devolver_pelicula(self):
         """Devolver película rentada por el usuario"""

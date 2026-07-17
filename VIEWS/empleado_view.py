@@ -178,15 +178,30 @@ class EmpleadoView(tk.Toplevel):
                 return
                 
             cursor = self.conn.cursor()
+            
+            # Verificar el nombre correcto de la columna
             cursor.execute("""
+                SELECT COLUMN_NAME 
+                FROM INFORMATION_SCHEMA.COLUMNS 
+                WHERE TABLE_NAME = 'Renta' 
+                AND COLUMN_NAME LIKE '%pelicula%'
+            """)
+            columna_pelicula = cursor.fetchone()
+            
+            nombre_columna = columna_pelicula[0] if columna_pelicula else 'id_pelicula'
+            
+            # Usar el nombre correcto de la columna
+            query = f"""
                 SELECT p.id_pelicula, p.nombre, p.genero, p.duracion, p.costo_renta,
                     CASE 
-                        WHEN EXISTS (SELECT 1 FROM Renta r WHERE r.id_pelicula = p.id_pelicula AND r.estado = 'Activa') 
+                        WHEN EXISTS (SELECT 1 FROM Renta r WHERE r.{nombre_columna} = p.id_pelicula AND r.estado = 'Activa') 
                         THEN ' Rentada :(' 
                         ELSE ' Disponible :D' 
                     END as estado
                 FROM Pelicula p
-            """)
+            """
+            
+            cursor.execute(query)
             peliculas = cursor.fetchall()
             
             # Limpiar tabla
@@ -280,7 +295,6 @@ class EmpleadoView(tk.Toplevel):
         except Exception as e:
             messagebox.showerror("Error", f"No se pudieron actualizar las películas: {e}")
             
-
     def agregar_pelicula(self):
         """Abrir ventana para agregar nueva película"""
         try:
@@ -378,13 +392,19 @@ class EmpleadoView(tk.Toplevel):
 
     #se modifico esta parte del codigo ---------------------------
     def ver_devoluciones(self):
-        """Abrir vista de devoluciones"""
+        """Abrir vista de devoluciones con manejo de recargos"""
         try:
+            import sys
+            # Remover módulo de caché
+            if 'renta_view' in sys.modules:
+                del sys.modules['renta_view']
+            
             from renta_view import RentaView
             ventana = RentaView(self, "devoluciones")
             ventana.grab_set()
+            
         except Exception as e:
-            messagebox.showerror("Error", f"No se pudo abrir el panel de devoluciones: {e}")
+            messagebox.showerror("Error", f"No se pudo abrir el panel de devoluciones:\n{e}")
 
 
     def actualizar_columnas_tabla(self, nuevas_columnas):
